@@ -11,13 +11,68 @@ Install's instructions are available in the [README.md file](https://github.com/
 This package contain the parser for Image and Video.
 First load the model and the ParseObject.
 
+- tools
+
+Tools for reshape frame:
+
+1) ReshapePic1: resize the picture and crop the center
+2) ReshapePic2: resize the picture and complete with black pixels
+3) ROI: extract a Region Of Interest and reshape it with the previous method
+
+```python
+frame = cv2.imread("รูปรจนาที่อังกอร์.jpg")
+x, y, _ = frame.shape
+
+
+# Remove a few pixels to make the x/20 ,y/20
+# Resize frame to be a tenth of the initial frame 
+x -= x % 20
+y -= y % 20
+frame = frame[:x, :y]
+
+x //= 10
+y //= 10
+
+frame = cv2.resize(frame, (y, x), interpolation=cv2.INTER_AREA)
+
+rsp1 = ReshapePic1(shape=(x//2, y//2, 3))
+rsp2 = ReshapePic2(shape=(x//2, y//2, 3))
+rsp3 = ROI(shape=(x//2, y//2, 3))
+
+# Reshape the frame
+fr1 = rsp1(frame)
+fr2 = rsp2(frame)
+fr3_1 = rsp3(frame, (90, 130), (190, 230), method=1)
+fr3_2 = rsp3(frame, (90, 130), (190, 230), method=2)
+
+cv2.putText(frame, "original", (10, 10), cv2.FONT_HERSHEY_SIMPLEX, .5, (0, 0, 255), 2)
+cv2.putText(fr1, "ReshapePic1", (10, 10), cv2.FONT_HERSHEY_SIMPLEX, .5, (0, 0, 255), 2)
+cv2.putText(fr2, "ReshapePic2", (10, 10), cv2.FONT_HERSHEY_SIMPLEX, .5, (0, 0, 255), 2)
+cv2.putText(fr3_1, "ROI method=1", (10, 10), cv2.FONT_HERSHEY_SIMPLEX, .5, (0, 0, 255), 2)
+cv2.putText(fr3_2, "ROI method=2", (10, 10), cv2.FONT_HERSHEY_SIMPLEX, .5, (0, 0, 255), 2)
+
+# Create a new frame and add the previous frame
+fr = np.zeros((x*2, y, 3))
+fr[:x, :y,:] += frame
+fr[x:x+x//2, :y//2] = fr1
+fr[x:x+x//2, y//2:] = fr2
+fr[x+x//2:, :y//2] = fr3_1
+fr[x+x//2:, y//2:] = fr3_2
+
+#Save the result
+cv2.imwrite(filename='img_doc/parser_tools.jpg', img=fr)
+```
+
+![res](img_doc/parser_tools.jpg)
+
+
 ```python
 import cv2
 import trt_pose.coco
 from trt_pose.parse_objects import ParseObjects
 import torch2trt
 import json
-from parser.image_parser import ReshapePic1
+from parser.tools import ReshapePic1
 
 #Load the model
 mdl = "resnet18_baseline_att_224x224_A_epoch_249_trt.pth"
