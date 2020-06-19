@@ -9,13 +9,14 @@ import torch2trt
 class _ImageParser(object):
     """ImageParser object, perform trt_pose, pose estimation to a single frame"""
 
-    def __init__(self, trt_model, parse_objects):
+    def __init__(self, trt_model, parse_objects, points=18):
         """
         :param trt_model: torch2trt model (torch model optimized for tensorRT)
         :param parse_objects: trt_pose.parse_objects.ParseObjects
         """
         self.trt_model = trt_model
         self.parse_objects = parse_objects
+        self.points = points
 
     def _parse_image(self, frame, max_detection=100):
         """
@@ -25,7 +26,7 @@ class _ImageParser(object):
         :return: a tensor of shape (1, max_detection, number of points, 2) Chanel 0 : y; Chanel 1: x
         """
         height, width, _ = frame.shape
-        npoints = self.parse_objects.topology.shape[0]
+        npoints = self.points
         
         out = torch.zeros((1, max_detection, npoints, 2)) * np.nan
 
@@ -62,12 +63,12 @@ class _ImageParser(object):
 class _VideoParser(_ImageParser):
     """VideoParser mother class"""
 
-    def __init__(self, trt_model, parse_objects):
+    def __init__(self, trt_model, parse_objects, points=18):
         """
         :param trt_model: torch2trt model (torch model optimized for tensorRT)
         :param parse_objects: trt_pose.parse_objects.ParseObjects
         """
-        super().__init__(trt_model, parse_objects)
+        super().__init__(trt_model, parse_objects, points)
 
     def _parse_video_stream(self, videocapture, max_detection=100, reshape_frame=None, stream_size=1):
         """
@@ -79,7 +80,7 @@ class _VideoParser(_ImageParser):
         :return: tensor (stream_size, max_detection, points, 2)
         """
 
-        points = self.parse_objects.topology.shape[0]
+        points = self.points
         res = torch.zeros((0, max_detection, points, 2))
 
         while videocapture.isOpened():
@@ -114,7 +115,7 @@ class _VideoParser(_ImageParser):
         :return: full tensor (frames, max_detection, points, 2)
         """
 
-        points = self.parse_objects.topology.shape[0]
+        points = self.points
         print(points)
         res = torch.zeros((0, max_detection, points, 2))
         print(res.shape)

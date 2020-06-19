@@ -16,12 +16,13 @@ from parser import _VideoParser
 class VideoParser(_VideoParser):
     """Parse a video from a local file"""
 
-    def __init__(self, trt_model, parse_objects):
+    def __init__(self, trt_model, parse_objects, points=18):
         """
         :param trt_model:
+        :param points: number of detected points
         :param parse_objects:
         """
-        super().__init__(trt_model, parse_objects)
+        super().__init__(trt_model, parse_objects, points)
 
     def __call__(self, video_path, max_detection=100, reshape_frame=None):
         """
@@ -55,12 +56,13 @@ class VideoParser(_VideoParser):
 class YouTube_VideoParser(_VideoParser):
     """A VideoParser for YouTube video stream"""
 
-    def __init__(self, trt_model, parse_objects):
+    def __init__(self, trt_model, parse_objects, points=18):
         """
         :param trt_model:
         :param parse_objects:
+        :param points:
         """
-        super().__init__(trt_model, parse_objects)
+        super().__init__(trt_model, parse_objects, points)
 
     def __call__(self, video_url, max_detection=100, reshape_frame=None):
         """
