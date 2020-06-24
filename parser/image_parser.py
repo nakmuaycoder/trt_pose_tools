@@ -7,7 +7,7 @@ All of those object inherit from parser._ImageParser class
 """
 import cv2
 import numpy as np
-from parser import _ImageParser
+from . import _ImageParser
 
 class ImageParser(_ImageParser):
     """ Parse an image"""

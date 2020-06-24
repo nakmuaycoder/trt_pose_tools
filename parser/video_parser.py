@@ -10,8 +10,7 @@ All of those object inherit from parser._VideoParser class
 import os
 import cv2
 import pafy
-from parser import _VideoParser
-
+from . import _VideoParser
 
 class VideoParser(_VideoParser):
     """Parse a video from a local file"""

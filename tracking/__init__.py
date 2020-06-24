@@ -67,3 +67,38 @@ class _Tracker(object):
     def __contains__(self, item):
         """ True if item is parametres of tracking"""
         return any(_ not in self.kwargs.items() for _ in item.items())
+
+# ===================================================  Test Class  =====================================================
+
+keypoints = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder", "right_shoulder", "left_elbow",
+            "right_elbow", "left_wrist", "right_wrist", "left_hip", "right_hip", "left_knee", "right_knee",
+            "left_ankle", "right_ankle", "neck"]
+
+
+image = cv2.imread("C:\\Users\\rose_\\Desktop\\olivier\\trt_pose_tools\\data\\20200315_124340.jpg")
+x, y, _ = image.shape
+
+x //= 8
+y //= 8
+
+image = cv2.resize(image, (y, x), interpolation=cv2.INTER_AREA)
+
+# (frames, max_detection, points, 2)
+tracking_result = np.asarray([1, 0])
+keypoint_tensor = np.zeros(shape=(1, 10, 9, 2)) * np.nan
+
+# first person
+keypoint_tensor[0][0][:, 0] = np.asarray([100, 172, 210, 135, 150, np.nan, np.nan, np.nan, np.nan])
+keypoint_tensor[0][0][:, 1] = np.asarray([292, 267, 269, 270, 300, np.nan, np.nan, np.nan, np.nan])
+
+# second person
+keypoint_tensor[0][1][:, 0] = np.asarray([254, 238, 272, 295, 231, 353, 370, 331, 275])
+keypoint_tensor[0][1][:, 1] = np.asarray([342, 331, 330, 341, 388, 406, 495, 387, 386])
+
+olive = _Tracker(keypoints=keypoints, olive={"a": 1, "b": 2, "c": 3})
+nana = _Tracker(keypoints=keypoints, nana={"a": 1, "b": 2, "c": 3})
+
+nous = olive + nana
+
+#nous._show_tracking(frame=image, keypoint_tensor=keypoint_tensor, tracking_result=tracking_result)
+

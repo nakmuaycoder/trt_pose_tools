@@ -3,7 +3,7 @@ Use color filter to recognize person
 
 """
 
-from tracking import _Tracker
+from . import _Tracker
 import cv2
 import numpy as np
 import torch
@@ -93,4 +93,3 @@ class KeypointsColorTracker(_Tracker):
                 mask = np.where(mask > 0, 1, 0).sum() / np.prod(mask.shape)
                 prob += mask / npoints
         return prob
-
