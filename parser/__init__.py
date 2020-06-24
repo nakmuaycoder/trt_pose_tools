@@ -77,7 +77,7 @@ class _VideoParser(_ImageParser):
         :param max_detection: limit the number of persons detected
         :param reshape_frame: a ReshapePic1 or ReshapePic2 object or a function that return an array from an array
         :param stream_size: Number of frame returned per batch
-        :return: tensor (stream_size, max_detection, points, 2)
+        :return: gennerator tensor (stream_size, max_detection, points, 2)
         """
 
         points = self.points
@@ -103,8 +103,7 @@ class _VideoParser(_ImageParser):
                 # Limit the tensor to the stream_size last tensors
                 res = res[-stream_size:]
 
-            if stream_size >= res.shape[0]:
-                yield res
+            yield res, frame
     
     def _parse_video_full(self, videocapture, max_detection=100, reshape_frame=None):
         """
@@ -116,16 +115,14 @@ class _VideoParser(_ImageParser):
         """
 
         points = self.points
-        print(points)
         res = torch.zeros((0, max_detection, points, 2))
-        print(res.shape)
 
         out = self._parse_video_stream(videocapture=videocapture, max_detection=max_detection, reshape_frame=reshape_frame, stream_size=1)
         
         while True:
             #  Loop through the generator
             try:
-                z = next(out)
+                z, _ = next(out)
             except:
                 z = None
                 break
