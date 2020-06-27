@@ -8,6 +8,7 @@ All of those object inherit from parser._ImageParser class
 import cv2
 import numpy as np
 from . import _ImageParser
+import torch
 
 class ImageParser(_ImageParser):
     """ Parse an image"""
@@ -26,5 +27,25 @@ class ImageParser(_ImageParser):
         :param max_detection: Maximal number of person detected
         :return: a tensor of shape (number of person detected, number of points, 2) Chanel 0 : y; Chanel 1: x
         """
-        peak = self._parse_image(frame, max_detection)
-        return peak
+
+        max_batch_size = self.max_batch_size
+        out = torch.zeros((0, max_detection, self.points, 2))
+
+        try:
+            batch_size = len(frame)
+        except:
+            frame = [frame]
+            batch_size = 1
+        
+        nbatch = batch_size // max_batch_size
+        rest = batch_size % max_batch_size
+
+        for i in range(nbatch):
+            peak = self._parse_image(frame[i * max_batch_size:(i + 1) * max_batch_size], max_detection)
+            out = torch.cat([out, peak], dim=0)
+
+        if rest != 0:
+            peak = self._parse_image(frame[-rest:], max_detection)
+            out = torch.cat([out, peak], dim=0)
+
+        return out

@@ -32,7 +32,7 @@ class VideoParser(_VideoParser):
         :return: full tensor (frames, max_detection, points, 2)
         """
         videocapture = cv2.VideoCapture(video_path)
-        out = self._parse_video_full(videocapture, max_detection=100, reshape_frame=None)
+        out = self._parse_video_full(videocapture, max_detection=max_detection, reshape_frame=reshape_frame)
         return out
 
     def stream(self, video_path, max_detection, stream_size, reshape_frame=None):

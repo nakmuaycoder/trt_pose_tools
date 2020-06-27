@@ -17,47 +17,50 @@ class _ImageParser(object):
         self.trt_model = trt_model
         self.parse_objects = parse_objects
         self.points = points
+        self.max_batch_size = trt_model.engine.max_batch_size
+
+    def _preprocess(self, single_frame):
+        mean = torch.Tensor([0.485, 0.456, 0.406]).cuda()
+        std = torch.Tensor([0.229, 0.224, 0.225]).cuda()
+        device = torch.device('cuda')
+        data = cv2.cvtColor(single_frame, cv2.COLOR_BGR2RGB)
+        data = PIL.Image.fromarray(data)
+        data = transforms.functional.to_tensor(data).to(device)
+        data.sub_(mean[:, None, None]).div_(std[:, None, None])
+        return data[None, ...]
 
     def _parse_image(self, frame, max_detection=100):
         """
         Parse a single frame
-        :param frame: 3 dimensional np.ndarray
+        :param frame: 3 dimensional np.ndarray or list of np.ndarray
         :param max_detection: Maximal number of person detected
         :return: a tensor of shape (1, max_detection, number of points, 2) Chanel 0 : y; Chanel 1: x
         """
-        height, width, _ = frame.shape
-        npoints = self.points
-        
-        out = torch.zeros((1, max_detection, npoints, 2)) * np.nan
 
-        mean = torch.Tensor([0.485, 0.456, 0.406]).cuda()
-        std = torch.Tensor([0.229, 0.224, 0.225]).cuda()
-        device = torch.device('cuda')
-        data = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        data = PIL.Image.fromarray(data)
-        data = transforms.functional.to_tensor(data).to(device)
-        data.sub_(mean[:, None, None]).div_(std[:, None, None])
-        data = data[None, ...]
+        #try:
+        #    height, width, _ = frame.shape
+        #    data = self._preprocess(single_frame=frame)
+        #except:
+
+        height, width, _ = frame[0].shape
+        data = torch.cat([self._preprocess(single_frame=_) for _ in frame])
 
         cmap, paf = self.trt_model(data)
         cmap, paf = cmap.detach().cpu(), paf.detach().cpu()
         counts, objects, normalized_peaks = self.parse_objects(cmap, paf)
-        count = min(int(counts[0]), max_detection)  # number detected objects
 
-        if count > 0:
-            objects = objects[0, 0:count]
-            npoints = objects[0].shape[0]
-            normalized_peaks = normalized_peaks[0, 0:npoints, :count, :]
-            normalized_peaks = torch.transpose(normalized_peaks, 0, 1)
-            objects = torch.cat([objects.unsqueeze(-1), objects.unsqueeze(-1)], 2)
-            normalized_peaks = torch.where(objects >= 0, normalized_peaks, normalized_peaks * np.nan)
-            normalized_peaks[:, :, 1] *= width
-            normalized_peaks[:, :, 0] *= height
+        batch_size, _, point = objects.shape
+        out = torch.zeros((batch_size, max_detection, point, 2)) * np.nan
 
-            shp = normalized_peaks.shape
-            out[0][:shp[0], :shp[1], :shp[2]] = normalized_peaks
+        for frame in range(batch_size):
+            for obj_index in range(min(counts[frame], max_detection)):
+                obj = objects[frame, obj_index]
+                out[frame, obj_index] = torch.Tensor([[normalized_peaks[frame, i, _, 0], normalized_peaks[frame, i, _, 1]] if _ >= 0 else [np.nan, np.nan] for i, _ in  enumerate(obj) ])
 
-            return out
+        out[:, :, :, 0] *= width
+        out[:, :, :, 1] *= height
+
+        return out
 
 
 class _VideoParser(_ImageParser):
@@ -81,30 +84,41 @@ class _VideoParser(_ImageParser):
         """
 
         points = self.points
+        batch_size = self.max_batch_size
         res = torch.zeros((0, max_detection, points, 2))
+        batch_output = []
 
-        while videocapture.isOpened():
-            _, frame = videocapture.read()
+        while videocapture.get(1) <= stream_size and videocapture.get(1) <= videocapture.get(cv2.CAP_PROP_FRAME_COUNT):
+            # Initialisation, get the first stream size values
+            batch = [videocapture.read()[1] for _ in range(batch_size)]
 
-            if frame is None:
-                break
+            if not reshape_frame is None:
+                batch = [reshape_frame(_) for _ in batch if not _ is None]
+            
+            batch_output += batch
+            z = self._parse_image(frame=batch, max_detection=max_detection)
+            res = torch.cat([res, z], dim=0)
 
-            if reshape_frame is not None:
-                frame = reshape_frame(frame)
+        yield res[:stream_size], batch_output[:stream_size]  # First output
 
-            out = self._parse_image(frame, max_detection)  # shape (1, max_detection, points:18, 2)
-            res = torch.cat([res, torch.zeros((1, max_detection, points, 2)) * np.nan], dim=0)  # Add one nan tensor
+        while videocapture.get(1) <= videocapture.get(cv2.CAP_PROP_FRAME_COUNT):
+            batch_output = batch_output[1:]
+            batch = [videocapture.read()[1] for _ in range(batch_size) if not _ is None]
 
-            if out is not None:
-                # Add detected values
-                res[-1] = out
+            if not reshape_frame is None:
+                batch = [reshape_frame(_) for _ in batch if not _ is None]
 
-            if res.shape[0] > stream_size:
-                # Limit the tensor to the stream_size last tensors
-                res = res[-stream_size:]
+            batch_output += batch
+            z = self._parse_image(frame=batch, max_detection=max_detection)
+            res = torch.cat([res[1:], z], dim=0)
 
-            yield res, frame
-    
+            yield res[:stream_size], batch_output[:stream_size]
+
+            while res.shape[0] >= stream_size:
+                res = res[1:]
+                batch_output = batch_output[1:]
+                yield res[:stream_size]
+
     def _parse_video_full(self, videocapture, max_detection=100, reshape_frame=None):
         """
         Parse all the video
@@ -115,20 +129,16 @@ class _VideoParser(_ImageParser):
         """
 
         points = self.points
+        batch_size = self.max_batch_size
         res = torch.zeros((0, max_detection, points, 2))
 
-        out = self._parse_video_stream(videocapture=videocapture, max_detection=max_detection, reshape_frame=reshape_frame, stream_size=1)
-        
-        while True:
-            #  Loop through the generator
-            try:
-                z, _ = next(out)
-            except:
-                z = None
-                break
+        while videocapture.get(1) <= 20: #videocapture.get(cv2.CAP_PROP_FRAME_COUNT):
+            batch = [videocapture.read()[1] for _ in range(batch_size)]
 
-            if z is not None:
-                res = torch.cat([res, z], dim=0)
+            if not reshape_frame is None:
+                batch = [reshape_frame(_) for _ in batch if not _ is None]
+
+            z = self._parse_image(frame=batch, max_detection=max_detection)
+            res = torch.cat([res, z], dim=0)
 
         return res
-
