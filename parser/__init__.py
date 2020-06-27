@@ -132,7 +132,7 @@ class _VideoParser(_ImageParser):
         batch_size = self.max_batch_size
         res = torch.zeros((0, max_detection, points, 2))
 
-        while videocapture.get(1) <= 20: #videocapture.get(cv2.CAP_PROP_FRAME_COUNT):
+        while videocapture.get(1) <= videocapture.get(cv2.CAP_PROP_FRAME_COUNT) - batch_size:
             batch = [videocapture.read()[1] for _ in range(batch_size)]
 
             if not reshape_frame is None:
@@ -140,5 +140,8 @@ class _VideoParser(_ImageParser):
 
             z = self._parse_image(frame=batch, max_detection=max_detection)
             res = torch.cat([res, z], dim=0)
+
+        while videocapture.get(1) < videocapture.get(cv2.CAP_PROP_FRAME_COUNT):
+            batch += [videocapture.read()[1]]
 
         return res
