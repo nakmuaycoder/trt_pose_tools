@@ -3,7 +3,6 @@ import torch
 import torchvision.transforms as transforms
 import PIL.Image
 import cv2
-import torch2trt
 
 
 class _ImageParser(object):
@@ -37,11 +36,6 @@ class _ImageParser(object):
         :return: a tensor of shape (1, max_detection, number of points, 2) Chanel 0 : y; Chanel 1: x
         """
 
-        #try:
-        #    height, width, _ = frame.shape
-        #    data = self._preprocess(single_frame=frame)
-        #except:
-
         height, width, _ = frame[0].shape
         data = torch.cat([self._preprocess(single_frame=_) for _ in frame])
 
@@ -55,11 +49,9 @@ class _ImageParser(object):
         for frame in range(batch_size):
             for obj_index in range(min(counts[frame], max_detection)):
                 obj = objects[frame, obj_index]
-                out[frame, obj_index] = torch.Tensor([[normalized_peaks[frame, i, _, 0], normalized_peaks[frame, i, _, 1]] if _ >= 0 else [np.nan, np.nan] for i, _ in  enumerate(obj) ])
-
+                out[frame, obj_index] = torch.Tensor([[normalized_peaks[frame, i, _, 0], normalized_peaks[frame, i, _, 1]] if _ >= 0 else [np.nan, np.nan] for i, _ in enumerate(obj)])
         out[:, :, :, 0] *= width
         out[:, :, :, 1] *= height
-
         return out
 
 

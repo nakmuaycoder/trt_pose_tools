@@ -3,3 +3,4 @@ pafy
 opencv
 numpy
 Pillow
+scikit-learn
