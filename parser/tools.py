@@ -4,15 +4,24 @@ import cv2
 import numpy as np
 
 
-class ReshapePic1(object):
+class _Rsizer(object):
+    def __init__(self, shape):
+        self.shape = shape
+
+    def __repr__(self):
+        return "Shape ({}, {}, {})".format(self.shape[0], self.shape[1], self.shape[2])
+
+
+
+class ReshapePic1(_Rsizer):
     """ Resize and crop the center of the picture
      - Good for tv video where characters a @ the middle of the image"""
 
-    def __init__(self, shape):
+    def __init__(self, shape=(224, 224, 3)):
         """
         :param shape: tuple, destination shape
         """
-        self.shape = shape
+        super().__init__(shape=shape)
 
     def _reshape_pic1(self, array):
         """
@@ -40,14 +49,14 @@ class ReshapePic1(object):
 
 
 
-class ReshapePic2(object):
+class ReshapePic2(_Rsizer):
     """Resize the picture and add black bands"""
 
-    def __init__(self, shape):
+    def __init__(self, shape=(224, 224, 3)):
         """
         :param shape: tuple, destination shape
         """
-        self.shape = shape
+        super().__init__(shape=shape)
 
     def _reshape_pic2(self, array):
         """
@@ -76,9 +85,9 @@ class ReshapePic2(object):
 
 class ROI(ReshapePic1, ReshapePic2):
     """Return a special zone of a picture and return it with the desired shape"""
-    def __init__(self, shape):
+    def __init__(self, shape=(224, 224, 3)):
         """Instanciate the final shape of the output"""
-        super().__init__(shape)
+        _Rsizer.__init__(shape)
 
     def __call__(self, array, point1, point2, method=1):
         """
