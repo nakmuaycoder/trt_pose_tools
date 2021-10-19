@@ -1,97 +1,151 @@
 """
 VideoParser.
-Run trt_pose on videos
+Parse all of the frame from a video.
 
-Parser for video file and for YouTube video
-All of those object inherit from parser._VideoParser class
+VideoParsers retrun a tensor of shape (number of frames, number of detection, number of points, 2) 
 
+Creation of new parser:
+
+- Create a class that inherite from VideoCaptureParser and add the following line in the init of your class :
+super().__init__(video_capture=self.__open_videocapture(video_url), reshape_frame=reshape_frame, max_detection=max_detection)
+
+- Overwrite __open_videocapture method
+
+author : nakmuaycoder
+date : 10/2021
 """
 
+import numpy as np
 import os
 import cv2
 import pafy
-from . import _VideoParser
+from .image_parser import ImageParser
+import torch
+import tqdm
 
-class VideoParser(_VideoParser):
-    """Parse a video from a local file"""
+class VideoCaptureParser(ImageParser):
+    """
+    This class parse a cv2.VideCapture object.
+    """
+    def __init__(self, video_capture, reshape_frame=None, max_detection=100):
+        super().__init__(max_detection,reshape_frame)
+        self.__set_video_capture(video_capture)
 
-    def __init__(self, trt_model, parse_objects, points=18):
+    def __set_video_capture(self, video_capture):
         """
-        :param trt_model:
-        :param points: number of detected points
-        :param parse_objects:
+        Set a VideoCapture
         """
-        super().__init__(trt_model, parse_objects, points)
+        if hasattr(self, "__video_capture"):
+            self.__video_capture.release()
+        if not isinstance(video_capture, cv2.VideoCapture):
+            raise TypeError("video_capture must be a cv2.VideoCapture object")
+        self.__video_capture = video_capture
 
-    def __call__(self, video_path, max_detection=100, reshape_frame=None):
+    def __parse_frame(self):
         """
-        Parse all the video
-        :param video_path: path of the video or webcam access (0 or 1)
-        :param max_detection: limit the number of persons detected
-        :param reshape_frame: a ReshapePic1 or ReshapePic2 object or a function that return an array from an array
-        :return: full tensor (frames, max_detection, points, 2)
+        Get then parse the current frame
         """
-        videocapture = cv2.VideoCapture(video_path)
-        out = self._parse_video_full(videocapture, max_detection=max_detection, reshape_frame=reshape_frame)
-        return out
+        if self.__video_capture.isOpened():
+            ret, frame = self.__video_capture.read()  # Get the current frame
+        if not ret:
+            return
+        return super().__call__(frame=frame)  # Inference
 
-    def stream(self, video_path, max_detection, stream_size, reshape_frame=None):
+    def __parse_video_full(self):
         """
-        Create a generator that stream the data
-        :param video_path: path of the video
-        :param max_detection: limit the number of persons detected
-        :param reshape_frame: a ReshapePic1 or ReshapePic2 object or a function that return an array from an array
-        :param stream_size: Number of frame returned per batch
-        :return: tensor (stream_size, max_detection, points, 2)
+        Parse all the video.
+        Loop through the frame.
         """
-        if os.path.exists(video_path):
-            videocapture = cv2.VideoCapture(video_path)
+        self.__video_capture.set(2, 0)  # Go to the first frame
+        n_frames =  int(self.__video_capture.get(cv2.CAP_PROP_FRAME_COUNT))  # Number of frame
+        res = torch.zeros((n_frames, self.get_max_detection(), self.get_points(), 2)) * np.nan  # Instantiate output
+        
+        for i in tqdm.tqdm(range(n_frames)):
+            x = self.__parse_frame()  # Inference
+            if not x is None:
+                res[i] = x
+            else:
+                break
+        return res
 
-            out = self._parse_video_stream(videocapture=videocapture, max_detection=max_detection,
-                                           reshape_frame=reshape_frame, stream_size=stream_size)
-            return out
-
-
-class YouTube_VideoParser(_VideoParser):
-    """A VideoParser for YouTube video stream"""
-
-    def __init__(self, trt_model, parse_objects, points=18):
+    def __call__(self):
         """
-        :param trt_model:
-        :param parse_objects:
-        :param points:
+        Parse the full video
         """
-        super().__init__(trt_model, parse_objects, points)
+        return self.__parse_video_full()
+    
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        """
+        Return a single frame
+        """
+        return self.__parse_frame()
 
-    def __call__(self, video_url, max_detection=100, reshape_frame=None):
+    def __open_videocapture(self, source):
         """
-        Parse all the video
-        :param video_url: path of the video
-        :param max_detection: limit the number of persons detected
-        :param reshape_frame: a ReshapePic1 or ReshapePic2 object or a function that return an array from an array
-        :return: full tensor (frames, max_detection, points, 2)
+        Method to overwrite in subclass
         """
-        pfy = pafy.new(video_url)
+        return source
+
+    def change_source(self, source):
+        """
+        Change the source
+        """
+        self.__set_video_capture(video_capture=self.__open_videocapture(source))
+
+class VideoFileParser(VideoCaptureParser):
+    """
+    Parse a local video
+    """
+    def __init__(self, video_path, reshape_frame=None, max_detection=100):
+        super().__init__(video_capture=self.__open_videocapture(video_path), reshape_frame=reshape_frame, max_detection=max_detection)
+    
+    def __open_videocapture(self, source):
+        """
+        Open a cv2.VideoCapture from a path
+        """
+        if not os.path.exists(source):
+            raise FileNotFoundError("{} is not a valid path".format(source))
+        return cv2.VideoCapture(source)
+
+class YouTubeParser(VideoCaptureParser):
+    """
+    Parse a YouTube video from url.
+    """
+    def __init__(self, video_url, reshape_frame=None, max_detection=100):
+        super().__init__(video_capture=self.__open_videocapture(video_url), reshape_frame=reshape_frame, max_detection=max_detection)    
+
+    def __open_videocapture(self, source):
+        """
+        Open a cv2.VideoCapture from youtube url
+        """
+        pfy = pafy.new(source)
         play = pfy.getbest(preftype="mp4")
-        videocapture = cv2.VideoCapture(play.url)
-        out = self._parse_video_full(videocapture, max_detection, reshape_frame)
-        videocapture.release()
-        return out
+        return cv2.VideoCapture(play.url)
 
-    def stream(self, video_url, max_detection, stream_size, reshape_frame=None):
+class RpiCamParser(VideoCaptureParser):
+    """
+    Parse the rpi cam shot
+    """
+    def __init__(self, max_detection=100):
+        super().__init__(video_capture=self.__open_videocapture(), reshape_frame=None, max_detection=max_detection)
+    
+    def __open_videocapture(self):
         """
-        Create a generator that stream the data
-        :param video_url: url of the video
-        :param max_detection: limit the number of persons detected
-        :param reshape_frame: a ReshapePic1 or ReshapePic2 object or a function that return an array from an array
-        :param stream_size: Number of frame returned per batch
-        :return: tensor (stream_size, max_detection, points, 2)
+        Open cv2.VideoCapture from a int
         """
-        pfy = pafy.new(video_url)
-        play = pfy.getbest(preftype="mp4")
-        videocapture = cv2.VideoCapture(play.url)
-        out = self._parse_video_stream(videocapture=videocapture, max_detection=max_detection,
-                                       reshape_frame=reshape_frame, stream_size=stream_size)
-        videocapture.release()
-        return out
 
+        camSet = 'nvarguscamerasrc wbmode=3 tnr-mode=2 tnr-strength=1 ee-mode=2 ee-strength=1 !  video/x-raw(memory:NVMM), '
+        camSet += 'width=3264, height=2464, format=NV12, framerate=21/1 ! nvvidconv flip-method=2 ! video/x-raw, width=224, '
+        camSet += 'height=224, format=BGRx ! videoconvert ! video/x-raw, format=BGR ! videobalance contrast=1.5 brightness=-.2'
+        camSet += ' saturation=1.2 !  appsink'
+        return cv2.VideoCapture(camSet)
+    
+    def __call__(self):
+        """
+        Overwrite call.
+        The number of frames is infinite
+        """
+        return next(self)

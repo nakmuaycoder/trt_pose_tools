@@ -1,69 +1,95 @@
 # Parser
 
-This package contain the parser for Image and Video.
-First load the model and the ParseObject.
+This package contains differents kind of the parser for Image and Video.
 
+|Type|Type of input|Parser|
+|:----:|:----:|:----:|
+|Image|```numpy.ndarray```|[ImageParser](#Image-Parser)|
+|Video|```cv2.VideoCapture```|[VideoCaptureParser](#VideoCaptureParser)|
+|Video|File|[VideoFileParser](#VideoFileParser)|
+|Video|YouTube video|[YouTubeParser](#YouTubeParser)|
+|Video| Raspberry Pi Cam| [RpiCamParser](#RpiCamParser)
+|Video| Custom parser| [Create your own parser](#Create-customs-VideoParsers)
 
-## [image_parser](image_parser.py)
+## [Image Parser](image_parser.py)
 
-```python
+Parse a single image.
+Return a tensor of shape (max_detection, 18, 2)
+
+```py
 import cv2
-import trt_pose.coco
-from trt_pose.parse_objects import ParseObjects
-import torch2trt
-import json
-from tools.frame_reshaping import ReshapePic1
+from trt_pose_tools.parser import ImageParser
+from trt_pose_tools.image_preprocessing.frame_reshaping import ReshapePic1
 
-#Load the model
-mdl = "resnet18_baseline_att_224x224_A_epoch_249_trt.pth"
-model_trt = torch2trt.TRTModule()
-model_trt.load_state_dict(torch.load(mdl))
-
-# Instantiate a ParsObjects
-topology = "trt_pose/tasks/human_pose/human_pose.json"
-with open(topology, 'r') as f:
-    human_pose = json.load(f)
-topology = trt_pose.coco.coco_category_to_topology(human_pose)
-parse_object = ParseObjects(topology)
-
-rsp = ReshapePic1(shape=(224,224,3))
+image = cv2.imread("img_doc/test.jpg")  # Read the image
+parser = ImageParser(max_detection=100, reshape_fram=ReshapePic1(shape=(224,224,3)))  # Parser instantiation
+parser(image)  # Inference
 ```
 
-```python
-from parser.image_parser import ImageParser
-# Capture a single frame using the web cam
-cap = cv2.VideoCapture(0)
-_, frame = cap.read()
-cap.release()
+## [video_parser](video_parser.py)
 
-# Reshape the frame
-frame = rsp(frame)
+Parse videos using different objects.
 
-# Parse frame
-img_parser = ImageParser(trt_model=model_trt, parse_objects=parse_objects)
-result = image_parser(frame=frame, max_detection=100)
+### VideoCaptureParser
+
+```py
+from trt_pose_tools.parser import VideoCaptureParser
+from trt_pose_tools.image_preprocessing.frame_reshaping import ReshapePic1
+
+video_capture1 = cv2.VideoCapture("path_to_my_video1")  # Open a VideoCapture
+video_capture2 = cv2.VideoCapture("path_to_my_video2")  # Open a VideoCapture
+
+parser = VideoCaptureParser(video_capture=video_capture1, reshape_frame=ReshapePic1((224, 224)), max_detection=2)  # Parser instantiation
+next(parser)  # Parse the current frame
+parser()  # Parse the whole video
+
+parser.change_source(video_capture2)  # Change the source
+```
+### VideoFileParser
+
+```py
+from trt_pose_tools.parser import VideoFileParser
+from trt_pose_tools.image_preprocessing.frame_reshaping.frame_reshaping import ReshapePic1
+
+video_path = "path_to_my_video"
+parser = VideoFileParser(video_path=video_path, reshape_frame=ReshapePic1((224, 224)), max_detection=2)
 ```
 
-# [video_parser](video_parser.py)
+### YouTubeParser
 
-```python
-from parser.video_parser import VideoParser, YouTube_VideoParser
-url = "https://www.youtube.com/watch?v=0z3fw2yXC5I"
+```py
+from trt_pose_tools.parser import YouTubeParser
+from trt_pose_tools.image_preprocessing.frame_reshaping import ReshapePic1
 
-vdo_parser = VideoParser(trt_model=model_trt, parse_objects=parse_objects)
-yt_parser = YouTube_VideoParser(trt_model=model_trt, parse_objects=parse_objects)
+video_url = "https://www.youtube.com/watch?v=0z3fw2yXC5I"
+parser = YouTubeParser(video_path=video_path, reshape_frame=ReshapePic1((224, 224)), max_detection=2)
+```
+### RpiCamParser
 
-# Parse a YouTube video
-tensor = yt_parser(video_url=url, max_detection=100, reshape_frame=rsp)
+```py
+from trt_pose_tools.parser import RpiCamParser
 
-# Create a generator using the webcam returning the detected keypoints on the 5 last frame
-stream = vdo_parser.stream(video_path=0, max_detection=100, stream_size=5, reshape_frame=rsp)
+parser = YouTubeParser(max_detection=2)
+```
 
-# Iterate on stream
-while True:
-    try:
-        z = next(stream)
-    except:
-        z = None
-        break
+The ```__call__``` and ```__next__``` RpiCamParser method parse a single frame.
+The frame shape of the recorded frame is (224, 224, 3).
+User dont have to reshape it before the inference.
+
+### Create customs VideoParsers
+
+User can create custom VideoParser based on a ```VideoCaptureParser```:
+
+```py
+from trt_pose_tools.parser import VideoCaptureParser
+
+class myCustomParser(VideoCaptureParser):
+    def __init__(self, source, reshape_frame=None, max_detection=100):
+        super().__init__(video_capture=self.__open_videocapture(source), reshape_frame=reshape_frame, max_detection=max_detection)
+    
+    def __open_videocapture(self, source):
+        """
+        Open a videocapture here
+        """
+        pass
 ```
