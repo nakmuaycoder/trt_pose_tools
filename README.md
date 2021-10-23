@@ -1,18 +1,14 @@
 # trt_pose_tools
 
-This programm is made for run on jetson nano and contain additional tools for nvidia [trt_pose](https://github.com/NVIDIA-AI-IOT/trt_pose/tree/master/trt_pose) library.
+This project is a set of tools for pose estimation on jetson nano with nvidia [trt_pose](https://github.com/NVIDIA-AI-IOT/trt_pose/tree/master/trt_pose) library.
 
-Install's instructions are available in the [README.md file](https://github.com/NVIDIA-AI-IOT/trt_pose/blob/master/README.md) of the trt_pose project.
-
-
-## Package [tools](trt_pose_tools/image_preprocessing/README.md)
-
-
-
-## Package [Parser](trt_pose_tools//README.md)
-
-Return the coordinate of the body keypoints
-
-## Package [Tracking](trt_pose_tools//tracking/README.md)
-
-
+1) [x] [Create parsers](trt_pose_tools/parser/README.md)
+    - [x] Image parser
+    - [x] Video parser
+2) [ ] [Create trackers and identifier](trt_pose_tools/tracking/README.md)
+    - [ ] Color tracker
+    - [ ] Kalman tracker
+    - [ ] Pose tracker
+    - [ ] Facial recognition
+    
+3) [ ] [Move detection / recognition wrappers](trt_pose_tools/move.py)
